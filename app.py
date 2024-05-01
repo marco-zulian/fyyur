@@ -4,8 +4,9 @@
 
 import json
 import dateutil.parser
+import datetime
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for
+from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
@@ -54,6 +55,9 @@ class Venue(db.Model):
     seeking_talent = db.Column(db.Boolean, nullable=False, default=False)
     seeking_talent_description = db.Column(db.String)
 
+    def as_dict(self):
+      return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 class Artist(db.Model):
     __tablename__ = 'Artist'
 
@@ -68,6 +72,9 @@ class Artist(db.Model):
     genres = db.relationship('Artist', secondary=artists_genres, backref=db.backref('artists', lazy=True))
     seeking_venue = db.Column(db.Boolean, nullable=False, default=False)
     seeking_venue_description = db.Column(db.String)
+
+    def as_dict(self):
+      return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 class Show(db.Model):
    __tablename__ = 'Show'
@@ -108,53 +115,76 @@ def index():
 
 #  Venues
 #  ----------------------------------------------------------------
+def getUpcomingShowCounts(venue_id):
+  return db.session.query(Show) \
+    .filter(Show.start_time > datetime.now(), Show.venue_id == venue_id) \
+    .count()
 
 @app.route('/venues')
 def venues():
-  # TODO: replace with real venues data.
-  #       num_upcoming_shows should be aggregated based on number of upcoming shows per venue.
-  data=[{
-    "city": "San Francisco",
-    "state": "CA",
-    "venues": [{
-      "id": 1,
-      "name": "The Musical Hop",
-      "num_upcoming_shows": 0,
-    }, {
-      "id": 3,
-      "name": "Park Square Live Music & Coffee",
-      "num_upcoming_shows": 1,
-    }]
-  }, {
-    "city": "New York",
-    "state": "NY",
-    "venues": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }]
+  data = []
+  cities = db.session.query(Venue.city, Venue.state).distinct().all()
+
+  for city in cities:
+    venues = db.session \
+      .query(Venue.id, Venue.name) \
+      .where(Venue.city == city[0]) \
+      .where(Venue.state == city[1]) \
+      .all()
+
+    data.append({
+      "city": city[0],
+      "state": city[1],
+      "venues": [{
+        "id": venue[0],
+        "name": venue[1],
+        "num_upcoming_shows": getUpcomingShowCounts(venue[0]) 
+      } for venue in venues]
+    })
+
   return render_template('pages/venues.html', areas=data);
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
-  # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-  # seach for Hop should return "The Musical Hop".
-  # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
+  search_term=request.form.get('search_term', '')
+  query = db.session.query(Venue.id, Venue.name).filter(Venue.name.icontains(search_term))
+
   response={
-    "count": 1,
+    "count": query.count(),
     "data": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
+      "id": venue[0],
+      "name": venue[1],
+      "num_upcoming_shows": getUpcomingShowCounts(venue[0])
+    } for venue in query.all()]
   }
-  return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
+
+  return render_template('pages/search_venues.html', results=response, search_term=search_term)
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
   # shows the venue page with the given venue_id
   # TODO: replace with real venue data from the venues table, using venue_id
+  venue = db.session.get(Venue, venue_id)
+
+  data = venue.as_dict()
+  print(data)
+  # data = {
+  #   "id": venue.id,
+  #   "name": venue.name,
+  #   "genres": [],
+  #   "address": venue.address,
+  #   "city": venue.city,
+  #   "state": venue.state,
+  #   "phone": venue.phone,
+  #   "facebook_link": venue.facebook_link,
+  #   "seeking_talent": venue.seeking_talent,
+  #   "seeking_description": venue.seeking_talent_description,
+  #   "image_link": venue.image_link,
+  #   "past_shows": [],
+  #   "upcoming_shows": [],
+  #   "past_shows_count": 0,
+  #   "upcoming_shows_count": 0,
+  # }
   data1={
     "id": 1,
     "name": "The Musical Hop",
