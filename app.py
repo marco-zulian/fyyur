@@ -139,7 +139,7 @@ def venues():
 
   for city in cities:
     venues = db.session \
-      .query(Venue.id, Venue.name) \
+      .query(Venue) \
       .where(Venue.city == city[0]) \
       .where(Venue.state == city[1]) \
       .all()
@@ -148,9 +148,9 @@ def venues():
       "city": city[0],
       "state": city[1],
       "venues": [{
-        "id": venue[0],
-        "name": venue[1],
-        "num_upcoming_shows": len(getVenueUpcomingShows(venue[0]))
+        "id": venue.id,
+        "name": venue.name,
+        "num_upcoming_shows": len(venue.shows)
       } for venue in venues]
     })
 
@@ -159,14 +159,14 @@ def venues():
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
   search_term=request.form.get('search_term', '')
-  query = db.session.query(Venue.id, Venue.name).filter(Venue.name.icontains(search_term))
+  query = db.session.query(Venue).filter(Venue.name.icontains(search_term))
 
   response={
     "count": query.count(),
     "data": [{
-      "id": venue[0],
-      "name": venue[1],
-      "num_upcoming_shows": len(getVenueUpcomingShows(venue[0]))
+      "id": venue.id,
+      "name": venue.name,
+      "num_upcoming_shows": len(venue.shows)
     } for venue in query.all()]
   }
 
@@ -176,20 +176,20 @@ def search_venues():
 def show_venue(venue_id):
   venue = db.session.get(Venue, venue_id)
 
-  pastShows = getVenuePastShows(venue.id)
-  upcomingShows = getVenueUpcomingShows(venue.id)
+  pastShows = [show for show in venue.shows if show.start_time < datetime.now()]
+  upcomingShows = [show for show in venue.shows if show.start_time > datetime.now()]
 
   data = venue.as_dict()
   data["genres"] = [genre.name for genre in venue.genres]
-  data["past_shows"] = [{"artist_id": show[1],
-                         "artist_name": show[2],
-                         "artist_image_link": show[3],
-                         "start_time": show[0]} for show in pastShows]
+  data["past_shows"] = [{"artist_id": show.artist.id,
+                         "artist_name": show.artist.name,
+                         "artist_image_link": show.artist.image_link,
+                         "start_time": show.start_time} for show in pastShows]
   data["past_shows_count"] = len(pastShows)
-  data["upcoming_shows"] = [{"artist_id": show[1],
-                             "artist_name": show[2],
-                             "artist_image_link": show[3],
-                             "start_time": show[0]} for show in upcomingShows]
+  data["upcoming_shows"] = [{"artist_id": show.artist.id,
+                             "artist_name": show.artist.name,
+                             "artist_image_link": show.artist.image_link,
+                             "start_time": show.start_time} for show in upcomingShows]
   data["upcoming_shows_count"] = len(upcomingShows)
 
   return render_template('pages/show_venue.html', venue=data)
