@@ -54,7 +54,7 @@ class Venue(db.Model):
     genres = db.relationship('Genre', secondary=venues_genres, backref=db.backref('venues', lazy=True))
     seeking_talent = db.Column(db.Boolean, nullable=False, default=False)
     seeking_description = db.Column(db.String)
-    shows = db.relationship('Show', backref=db.backref('venues', lazy=True), cascade='all, delete-orphan')
+    shows = db.relationship('Show', backref=db.backref('venue', lazy=True), cascade='all, delete-orphan')
 
     def as_dict(self):
       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
@@ -73,7 +73,7 @@ class Artist(db.Model):
     genres = db.relationship('Genre', secondary=artists_genres, backref=db.backref('artists', lazy=True))
     seeking_venue = db.Column(db.Boolean, nullable=False, default=False)
     seeking_description = db.Column(db.String)
-    shows = db.relationship('Show', backref=db.backref('artists', lazy=True), cascade='all, delete-orphan')
+    shows = db.relationship('Show', backref=db.backref('artist', lazy=True), cascade='all, delete-orphan')
 
     def as_dict(self):
       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
@@ -260,20 +260,6 @@ def delete_venue(venue_id):
 
 #  Artists
 #  ----------------------------------------------------------------
-def getArtistUpcomingShows(artist_id):
-  return db.session.query(Venue.id, Venue.name, Venue.image_link, Show.start_time) \
-    .join(Venue, Venue.id == Show.venue_id) \
-    .filter(Show.artist_id == artist_id) \
-    .filter(Show.start_time > datetime.now()) \
-    .all()
-
-def getArtistPastShows(artist_id):
-  return db.session.query(Venue.id, Venue.name, Venue.image_link, Show.start_time) \
-    .join(Venue, Venue.id == Show.venue_id) \
-    .filter(Show.artist_id == artist_id) \
-    .filter(Show.start_time < datetime.now()) \
-    .all()
-
 @app.route('/artists')
 def artists():
   data=[{
@@ -286,14 +272,14 @@ def artists():
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
   search_term=request.form.get('search_term', '')
-  query = db.session.query(Artist.id, Artist.name).filter(Artist.name.icontains(search_term))
+  query = db.session.query(Artist).filter(Artist.name.icontains(search_term))
 
   response={
     "count": query.count(),
     "data": [{
-      "id": artist[0],
-      "name": artist[1],
-      "num_upcoming_shows": len(getArtistUpcomingShows(artist[0])),
+      "id": artist.id,
+      "name": artist.name,
+      "num_upcoming_shows": len(artist.shows),
     } for artist in query.all()]
   }
 
@@ -303,25 +289,25 @@ def search_artists():
 def show_artist(artist_id):
   artist = Artist.query.get(artist_id)
 
-  upcomingShows = getArtistUpcomingShows(artist.id)
-  pastShows = getArtistPastShows(artist.id)
+  upcomingShows = [show for show in artist.shows if show.start_time > datetime.now()]
+  pastShows = [show for show in artist.shows if show.start_time < datetime.now()]
   
   data = artist.as_dict()
   data['genres'] = [genre.name for genre in artist.genres]
 
   data['past_shows'] = [{
-    "venue_id": show[0],
-    "venue_name": show[1],
-    "venue_image_link": show[2],
-    "start_time": show[3]
+    "venue_id": show.venue.id,
+    "venue_name": show.venue.name,
+    "venue_image_link": show.venue.image_link,
+    "start_time": show.start_time
   } for show in pastShows]
   data['past_shows_count'] = len(pastShows)
 
   data['upcoming_shows'] = [{
-    'venue_id': show[0],
-    'venue_name': show[1],
-    'venue_image_link': show[2],
-    'start_time': show[3]
+    'venue_id': show.venue.id,
+    'venue_name': show.venue.name,
+    'venue_image_link': show.venue.image_link,
+    'start_time': show.start_time
   } for show in upcomingShows]
   data['upcoming_shows_count'] = len(upcomingShows)
 
