@@ -120,18 +120,6 @@ def index():
 
 #  Venues
 #  ----------------------------------------------------------------
-def getVenueUpcomingShows(venue_id):
-  return db.session.query(Show.start_time, Artist.id, Artist.name, Artist.image_link) \
-    .join(Artist, Artist.id == Show.artist_id) \
-    .filter(Show.start_time > datetime.now(), Show.venue_id == venue_id) \
-    .all()
-
-def getVenuePastShows(venue_id):
-  return db.session.query(Show.start_time, Artist.id, Artist.name, Artist.image_link) \
-    .join(Artist, Artist.id == Show.artist_id) \
-    .filter(Show.start_time < datetime.now(), Show.venue_id == venue_id) \
-    .all()
-
 @app.route('/venues')
 def venues():
   data = []
